@@ -3,13 +3,14 @@
 #include "stdafx.h"
 #include <opencv2/highgui.hpp>
 
+
+
 class CmdOptions {
 public:
-	bool good;
-	std::string bgdirname, outdirname;
-	int num, width, height;
-	CmdOptions(int argc, char **argv);
-	bool parse(int argc, char **argv);
-	std::string help();
+	CmdOptions(int &argc, char **argv);
+	const std::string& get(const std::string &option) const;
+	bool has(const std::string &option) const;
+private:
+	std::vector <std::string> tokens;
 };
 
