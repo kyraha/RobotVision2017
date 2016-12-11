@@ -16,13 +16,16 @@ int main(int argc, char** argv)
 		2);
 #endif
 
+	const int dispX = 848, dispY = 480;
+	int fontScale = 2 * RobotVideo::CAPTURE_ROWS / dispY;
+
 	if(argc < 2) {
 		std::cerr << "Image file name?" << std::endl;
 		return 1;
 	}
 
 	cv::Mat img = cv::imread(argv[1]);
-	cv::Size dispSize(424, 240);
+	cv::Size dispSize(dispX, dispY);
 	cv::Mat display;
 
 	RobotVideo* processor = RobotVideo::GetInstance();
@@ -111,13 +114,13 @@ int main(int argc, char** argv)
 			oss2 << "No target";
 			ossColor = cv::Scalar(0, 100,255);
 		}
-		cv::putText(img, oss1.str(), cv::Point(20,RobotVideo::CAPTURE_ROWS-32), 1, 1, ossColor, 1);
-		cv::putText(img, oss2.str(), cv::Point(20,RobotVideo::CAPTURE_ROWS-16), 1, 1, ossColor, 1);
+		cv::putText(img, oss1.str(), cv::Point(20,RobotVideo::CAPTURE_ROWS-8*fontScale), 1, fontScale, ossColor, 1);
+		cv::putText(img, oss2.str(), cv::Point(20,RobotVideo::CAPTURE_ROWS-16*fontScale), 1, fontScale, ossColor, 1);
 
 		std::ostringstream oss;
 		double t_end = double(clock())/CLOCKS_PER_SEC - t_start;
 		oss << 1000.0*(t_end) << " ms, " << 1.0 / t_end << " fps";
-		cv::putText(img, oss.str(), cv::Point(20,130), 1, 6, cv::Scalar(0, 200,255), 2);
+		cv::putText(img, oss.str(), cv::Point(20,16*fontScale), 1, fontScale, cv::Scalar(0, 200,255), 2);
 
 		cv::resize(img, display, dispSize);
 		cv::imshow("Hello!", display);
