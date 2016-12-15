@@ -27,7 +27,7 @@ public:
 	static constexpr double CAMERA_HEIGHT = 85; //!<- Tower height is 97" and the camera is 12" above the floor
 	static constexpr double CAMERA_ZERO_DIST = 130; //!<- Tower height is 97" and the camera is 12" above the floor
 
-	static const int CAPTURE_COLS=1920, CAPTURE_ROWS=1080;
+	static const int CAPTURE_COLS=1280, CAPTURE_ROWS=720;
 	//static const int CAPTURE_COLS=640, CAPTURE_ROWS=480;
 	//static const int CAPTURE_COLS=424, CAPTURE_ROWS=240;
 	static const int CAPTURE_PORT=0;
@@ -49,7 +49,7 @@ public:
 	float m_flat; //!<- Distance from the lens to the horizon in focal length units
 	float m_tilt; //!<- The pitch angle of the camera, tilt, in radians
 
-	void ProcessContours(cv::Mat Image);
+	std::vector<double> ProcessContours(cv::Mat Image);
 	void InitVariables();
 
 	// Hide constructors because singleton

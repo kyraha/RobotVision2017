@@ -33,7 +33,9 @@ int main(int argc, char** argv)
 	capturePipe << "nvcamerasrc ! video/x-raw(memory:NVMM)"
 		<< ", width=(int)" << RobotVideo::CAPTURE_COLS
 		<< ", height=(int)" << RobotVideo::CAPTURE_ROWS
-		<< ", format=(string)I420, framerate=(fraction)30/1 ! nvvidconv flip-method=2 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+		<< ", format=(string)I420, framerate=(fraction)30/1 ! "
+		<< "nvvidconv flip-method=2 ! video/x-raw, format=(string)BGRx ! "
+		<< "videoconvert ! video/x-raw, format=(string)BGR ! appsink";
 	cv::VideoCapture capture(capturePipe.str());
 
 //gst-launch-1.0 nvcamerasrc fpsRange="30.0 30.0" ! 'video/x-raw(memory:NVMM), width=(int)1920, height=(int)1080, format=(string)I420, framerate=(fraction)30/1' ! nvtee ! nvvidconv flip-method=2 ! 'video/x-raw(memory:NVMM), format=(string)I420' ! nvoverlaysink -e
@@ -83,7 +85,7 @@ int main(int argc, char** argv)
 
 
 		double t_start = double(clock())/CLOCKS_PER_SEC;
-		processor->ProcessContours(img);
+		std::vector<double> times = processor->ProcessContours(img);
 
 		// Draw pink boxes around detected targets
 		for (std::vector<cv::Point> box : processor->m_boxes) {
@@ -123,10 +125,18 @@ int main(int argc, char** argv)
 		cv::putText(img, oss.str(), cv::Point(20,16*fontScale), 1, fontScale, cv::Scalar(0, 200,255), 2);
 
 		cv::resize(img, display, dispSize);
+		for(int i=0; i < times.size(); ++i) {
+			std::ostringstream osst;
+			osst << i << ": " << times[i] - times[0];
+			cv::putText(display, osst.str(), cv::Point(20,160+i*16), 1, 1, cv::Scalar(90,255,90), 1);
+		}
 		cv::imshow("Hello!", display);
 		int key = 0xff & cv::waitKey(5);
 		if ((key & 255) == 27) break;
 		//if ((key & 255) == 32 && p_file != files.end()) filename = *p_file++;
+		if ((key & 255) == 32 ) {
+			cv::waitKey();
+		}
 	}
 	return 0;
 }

@@ -139,18 +139,25 @@ void PurgeBuffer(cv::VideoCapture& vcap, double fps=7.5)
  * This function updates the object's member data that can be queried later from outside.
  * \param contours Vector of contours. Where a contour is a Vector of Points
  */
-void RobotVideo::ProcessContours(cv::Mat Im) {
+std::vector<double> RobotVideo::ProcessContours(cv::Mat Im) {
+	double t_start = double(clock())/CLOCKS_PER_SEC;
 	cv::Mat hsvIm;
 	cv::Mat BlobIm;
 	cv::Mat bw;
+	std::vector<double> times;
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
 	// Convert and filter the image to extract only green pixels
 	cv::cvtColor(Im, hsvIm, CV_BGR2HSV);
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
 	cv::inRange(hsvIm, BlobLower, BlobUpper, BlobIm);
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
 	BlobIm.convertTo(bw, CV_8UC1);
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
 
 	// Extract Contours. Thanks OpenCV for all the math
 	std::vector<std::vector<cv::Point>> contours;
 	cv::findContours(bw, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
 
 	// To rearrange the set of random contours into a rated list of targets
 	// we're going to need a new vector that we can sort
@@ -237,6 +244,8 @@ void RobotVideo::ProcessContours(cv::Mat Im) {
 	m_boxes = boxes;
 	m_turns = turns;
 	mutex_unlock();
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
+	return times;
 }
 
 float RobotVideo::GetDistance(size_t i, Target_side side)
