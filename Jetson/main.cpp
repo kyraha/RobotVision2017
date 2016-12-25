@@ -74,7 +74,9 @@ int main(int argc, char** argv)
 
 #endif
 
-	while(true) {
+	std::vector<double> total_times;
+	double total_start = double(clock())/CLOCKS_PER_SEC;
+	for(size_t n = 1;; ++n) {
 
 		capture >> img;
 		if (img.empty()) {
@@ -86,6 +88,12 @@ int main(int argc, char** argv)
 
 		double t_start = double(clock())/CLOCKS_PER_SEC;
 		std::vector<double> times = processor->ProcessContours(img);
+		if(total_times.empty()) total_times = times;
+		else {
+			total_times[0] = n*n / (double(clock())/CLOCKS_PER_SEC - total_start);
+			for(size_t i = 1; i < times.size() && i < total_times.size(); ++i)
+				total_times[i] += times[i] - times[0];
+		}
 
 		// Draw pink boxes around detected targets
 		for (std::vector<cv::Point> box : processor->m_boxes) {
@@ -125,12 +133,14 @@ int main(int argc, char** argv)
 		cv::putText(img, oss.str(), cv::Point(20,16*fontScale), 1, fontScale, cv::Scalar(0, 200,255), 2);
 
 		cv::resize(img, display, dispSize);
-		for(int i=0; i < times.size(); ++i) {
+		for(int i=0; i < total_times.size(); ++i) {
 			std::ostringstream osst;
-			osst << i << ": " << times[i] - times[0];
+			osst << i << ": " << total_times[i] / n;
 			cv::putText(display, osst.str(), cv::Point(20,160+i*16), 1, 1, cv::Scalar(90,255,90), 1);
 		}
-		cv::imshow("Hello!", display);
+
+		if(n%30 == 0) cv::imshow("Hello!", display);
+
 		int key = 0xff & cv::waitKey(5);
 		if ((key & 255) == 27) break;
 		//if ((key & 255) == 32 && p_file != files.end()) filename = *p_file++;

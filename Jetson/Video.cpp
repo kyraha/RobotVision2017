@@ -106,31 +106,6 @@ RobotVideo* RobotVideo::GetInstance()
 	return m_pInstance;
 };
 
-/** \brief Purge the camera buffer
- *
- * The stream takes a while to start up, and because of it, images from the camera
- * buffer. We don't have a way to jump to the end of the stream to get the latest image, so we
- * run this loop as fast as we can and throw away all the old images. This wait, waits some number of seconds
- * before we are at the end of the stream, and can allow processing to begin.
- */
-void PurgeBuffer(cv::VideoCapture& vcap, double fps=7.5)
-{
-	time_t start, end;
-	cv::Mat frame;
-
-	//run in continuous loop
-	while (true)
-	{
-		start = clock();
-		vcap.read(frame);
-		end = clock();
-		double elapsed = double(end - start)/CLOCKS_PER_SEC;
-
-		if (elapsed > 0.5/fps || elapsed >= 5.0)
-			break;
-	}
-}
-
 /** \brief Process the list of found contours for FIRSTSTRONGHOLD
  *
  * This is the main logic for target processing in regards to FRC Stronghold game of 2016
@@ -140,7 +115,6 @@ void PurgeBuffer(cv::VideoCapture& vcap, double fps=7.5)
  * \param contours Vector of contours. Where a contour is a Vector of Points
  */
 std::vector<double> RobotVideo::ProcessContours(cv::Mat Im) {
-	double t_start = double(clock())/CLOCKS_PER_SEC;
 	cv::Mat hsvIm;
 	cv::Mat BlobIm;
 	cv::Mat bw;
@@ -305,7 +279,6 @@ void RobotVideo::Run()
 
 	//set true to indicate we're connected and the thread is working.
 	m_connected = true;
-	PurgeBuffer(capture, CAPTURE_FPS);
 
 	while(true) {
 		cv::Mat Im;
