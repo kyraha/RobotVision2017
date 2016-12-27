@@ -1,9 +1,11 @@
 #include "Misc/Video.h"
+#include <iostream>
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/calib3d/calib3d.hpp"
 #include "opencv2/highgui/highgui.hpp"
+#include "opencv2/cudaarithm.hpp"
+#include "opencv2/cudaimgproc.hpp"
 
-#include <iostream>
 #include <algorithm>
 #include <WPILib.h>
 #include <time.h>
@@ -115,11 +117,35 @@ RobotVideo* RobotVideo::GetInstance()
  * \param contours Vector of contours. Where a contour is a Vector of Points
  */
 std::vector<double> RobotVideo::ProcessContours(cv::Mat Im) {
-	cv::Mat hsvIm;
-	cv::Mat BlobIm;
-	cv::Mat bw;
 	std::vector<double> times;
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
+	cv::cuda::GpuMat hsvIm;
+	cv::cuda::GpuMat BlobIm;
+	cv::Mat bw;
+	cv::cuda::GpuMat dst, src, res;
+	src.upload(Im);
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
+
+        cv::cuda::cvtColor(src, hsvIm, CV_BGR2HSV);
+	cv::cuda::GpuMat channels_flip[3];
+	cv::cuda::GpuMat channels_flop[3];
+	cv::cuda::split(hsvIm, channels_flip);
+	//threshold HSV
+	cv::cuda::threshold(channels_flip[0], channels_flop[0], BlobLower[0], 255, cv::THRESH_BINARY);
+	cv::cuda::threshold(channels_flip[1], channels_flop[1], BlobLower[1], 255, cv::THRESH_BINARY);
+	cv::cuda::threshold(channels_flip[2], channels_flop[2], BlobLower[2], 255, cv::THRESH_BINARY);
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
+	cv::cuda::threshold(channels_flop[0], channels_flip[0], BlobUpper[0], 255, cv::THRESH_BINARY_INV);
+	cv::cuda::threshold(channels_flop[1], channels_flip[1], BlobUpper[1], 255, cv::THRESH_BINARY_INV);
+	cv::cuda::threshold(channels_flop[2], channels_flip[2], BlobUpper[2], 255, cv::THRESH_BINARY_INV);
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
+	cv::cuda::bitwise_and(channels_flip[0], channels_flip[1], dst);
+	cv::cuda::bitwise_and(channels_flip[2], dst, res);
+
+        res.download(bw);
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
+
+#if 0
 	// Convert and filter the image to extract only green pixels
 	cv::cvtColor(Im, hsvIm, CV_BGR2HSV);
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
@@ -127,6 +153,7 @@ std::vector<double> RobotVideo::ProcessContours(cv::Mat Im) {
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
 	BlobIm.convertTo(bw, CV_8UC1);
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
+#endif
 
 	// Extract Contours. Thanks OpenCV for all the math
 	std::vector<std::vector<cv::Point>> contours;
