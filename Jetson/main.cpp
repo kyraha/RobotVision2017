@@ -6,7 +6,11 @@
 int main(int argc, char** argv)
 {
 	const cv::Size dispSize(848, 480);
-	int fontScale = 2 * RobotVideo::CAPTURE_ROWS / dispSize.height;
+	const cv::HersheyFonts font = cv::FONT_HERSHEY_PLAIN;
+	const int fHeight = 12;
+	const double fScale = double(dispSize.height) / fHeight / 25;
+	const int fLine = fScale * fHeight;
+	const int fBold = fScale + 0.5;
 
 	cv::Mat img;
 	cv::Mat display;
@@ -60,41 +64,44 @@ int main(int argc, char** argv)
 			cv::polylines(img, crosshair, true, cv::Scalar(260, 0, 255),2);
 		}
 
-		std::ostringstream oss1, oss2;
-		cv::Scalar ossColor(260, 0, 255);
-		if (processor->HaveHeading() > 0) {
-			oss1 << "Turn: ";
-			oss2 << "Dist: ";
-			if (processor->HaveHeading() > 1) {
-				oss1 << processor->GetTurn(0) << " : " << processor->GetTurn(1);
-				oss2 << processor->GetDistance(0) << " : " << processor->GetDistance(1);
+		if(n%30 == 0) {
+			cv::resize(img, display, dispSize);
+
+			std::ostringstream oss1, oss2;
+			cv::Scalar ossColor(260, 0, 255);
+			if (processor->HaveHeading() > 0) {
+				oss1 << "Turn: ";
+				oss2 << "Dist: ";
+				if (processor->HaveHeading() > 1) {
+					oss1 << processor->GetTurn(0) << " : " << processor->GetTurn(1);
+					oss2 << processor->GetDistance(0) << " : " << processor->GetDistance(1);
+				}
+				else {
+					oss1 << processor->GetTurn();
+					oss2 << processor->GetDistance();
+				}
 			}
 			else {
-				oss1 << processor->GetTurn();
-				oss2 << processor->GetDistance();
+				oss1 << "No target";
+				oss2 << "No target";
+				ossColor = cv::Scalar(0, 100,255);
 			}
-		}
-		else {
-			oss1 << "No target";
-			oss2 << "No target";
-			ossColor = cv::Scalar(0, 100,255);
-		}
-		cv::putText(img, oss1.str(), cv::Point(20,RobotVideo::CAPTURE_ROWS-8*fontScale), 1, fontScale, ossColor, 1);
-		cv::putText(img, oss2.str(), cv::Point(20,RobotVideo::CAPTURE_ROWS-16*fontScale), 1, fontScale, ossColor, 1);
+			cv::putText(display, oss1.str(), cv::Point(20,22*fLine), font, fScale, ossColor, fBold);
+			cv::putText(display, oss2.str(), cv::Point(20,23*fLine), font, fScale, ossColor, fBold);
 
-		std::ostringstream oss;
-		double t_end = double(clock())/CLOCKS_PER_SEC - t_start;
-		oss << 1000.0*(t_end) << " ms, " << 1.0 / t_end << " fps";
-		cv::putText(img, oss.str(), cv::Point(20,16*fontScale), 1, fontScale, cv::Scalar(0, 200,255), 2);
-
-		cv::resize(img, display, dispSize);
-		for(int i=0; i < total_times.size(); ++i) {
-			std::ostringstream osst;
-			osst << i << ": " << total_times[i] / n;
-			cv::putText(display, osst.str(), cv::Point(20,160+i*16), 1, 1, cv::Scalar(90,255,90), 1);
+			for(int i=0; i < total_times.size(); ++i) {
+				std::ostringstream osst;
+				osst << i << ": " << total_times[i] / n;
+				cv::putText(display, osst.str(), cv::Point(20,(4+i)*fLine), font, fScale, cv::Scalar(90,255,90), fBold);
+			}
+			std::ostringstream oss;
+			double t_end = double(clock())/CLOCKS_PER_SEC - t_start;
+			oss << 1000.0*(t_end) << " ms, frame: " << n;
+			cv::putText(display, oss.str(), cv::Point(20,2*fLine), font, fScale, cv::Scalar(0, 200,255), fBold);
+			cv::imshow("Hello!", display);
 		}
 
-		if(n%60 == 0) cv::imshow("Hello!", display);
+
 
 		int key = 0xff & cv::waitKey(5);
 		if ((key & 255) == 27) break;
