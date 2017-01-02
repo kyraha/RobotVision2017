@@ -119,30 +119,35 @@ RobotVideo* RobotVideo::GetInstance()
 std::vector<double> RobotVideo::ProcessContours(cv::Mat Im) {
 	std::vector<double> times;
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
-	cv::cuda::GpuMat hsvIm;
-	cv::cuda::GpuMat BlobIm;
+	cv::cuda::GpuMat src, hsvIm;
+	cv::cuda::GpuMat channels[3];
 	cv::Mat bw;
-	cv::cuda::GpuMat dst, src, res;
+
+	// Upload the source data to the GPU and process it there
 	src.upload(Im);
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
 
-        cv::cuda::cvtColor(src, hsvIm, CV_BGR2HSV);
-	cv::cuda::GpuMat channels_flip[3];
-	cv::cuda::GpuMat channels_flop[3];
-	cv::cuda::split(hsvIm, channels_flip);
-	//threshold HSV
-	cv::cuda::threshold(channels_flip[0], channels_flop[0], BlobLower[0], 255, cv::THRESH_BINARY);
-	cv::cuda::threshold(channels_flip[1], channels_flop[1], BlobLower[1], 255, cv::THRESH_BINARY);
-	cv::cuda::threshold(channels_flip[2], channels_flop[2], BlobLower[2], 255, cv::THRESH_BINARY);
+    cv::cuda::cvtColor(src, hsvIm, CV_BGR2HSV);
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
-	cv::cuda::threshold(channels_flop[0], channels_flip[0], BlobUpper[0], 255, cv::THRESH_BINARY_INV);
-	cv::cuda::threshold(channels_flop[1], channels_flip[1], BlobUpper[1], 255, cv::THRESH_BINARY_INV);
-	cv::cuda::threshold(channels_flop[2], channels_flip[2], BlobUpper[2], 255, cv::THRESH_BINARY_INV);
+	cv::cuda::split(hsvIm, channels);
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
-	cv::cuda::bitwise_and(channels_flip[0], channels_flip[1], dst);
-	cv::cuda::bitwise_and(channels_flip[2], dst, res);
+	//threshold, reset to zero everything that is above the upper limit
+	cv::cuda::threshold(channels[0], channels[0], BlobUpper[0], 255, cv::THRESH_TOZERO_INV);
+	cv::cuda::threshold(channels[1], channels[1], BlobUpper[1], 255, cv::THRESH_TOZERO_INV);
+	cv::cuda::threshold(channels[2], channels[2], BlobUpper[2], 255, cv::THRESH_TOZERO_INV);
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
+	//threshold, reset to zero what is below the lower limit, otherwise to 255
+	cv::cuda::threshold(channels[0], channels[0], BlobLower[0], 255, cv::THRESH_BINARY);
+	cv::cuda::threshold(channels[1], channels[1], BlobLower[1], 255, cv::THRESH_BINARY);
+	cv::cuda::threshold(channels[2], channels[2], BlobLower[2], 255, cv::THRESH_BINARY);
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
+	//combine all three channels and collapse them into one B/W image (to channels[0])
+	cv::cuda::bitwise_and(channels[0], channels[1], channels[0]);
+	cv::cuda::bitwise_and(channels[0], channels[2], channels[0]);
+	times.push_back(double(clock())/CLOCKS_PER_SEC);
 
-        res.download(bw);
+	// Return back to the CPU
+	channels[0].download(bw);
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
 
 #if 0
