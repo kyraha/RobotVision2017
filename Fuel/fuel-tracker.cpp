@@ -3,6 +3,7 @@
 #include "opencv2/highgui.hpp"
 #include "opencv2/cudaarithm.hpp"
 #include "opencv2/cudaimgproc.hpp"
+#include "opencv2/cudafilters.hpp"
 
 #include <algorithm>
 #include <time.h>
@@ -17,12 +18,13 @@
  * We care about anything that falls between 65 and 90 by the hue but the saturation and
  * brightness can be in a quite wide range.
  */
-static cv::Vec3i BlobLower(65, 100,  65);
-static cv::Vec3i BlobUpper(90, 255, 255);
+static cv::Vec3i BlobLower(26, 63,  60);
+static cv::Vec3i BlobUpper(41, 255, 255);
 
-static const int CAPTURE_COLS = 1280;
-static const int CAPTURE_ROWS = 720;
+static const cv::Size frameSize(1280, 720);
+static const cv::Size dispSize(848, 480);
 
+static std::vector<double> times;
 /* Microsoft HD3000 camera, 424x240, inches */
 /* %YAML:1.0
 calibration_time: "02/04/16 16:27:55"
@@ -43,8 +45,7 @@ static const cv::Matx<double, 5, 1> distortion_coefficients( //: !!opencv-matrix
 		1.4944420484345493e+000 );
 */
 
-std::vector<double> ProcessContours(cv::Mat Im) {
-	std::vector<double> times;
+std::vector<cv::Vec3f> DetectFuel(cv::Mat Im) {
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
 	cv::cuda::GpuMat src, hsvIm;
 	cv::cuda::GpuMat channels[3];
@@ -73,10 +74,33 @@ std::vector<double> ProcessContours(cv::Mat Im) {
 	cv::cuda::bitwise_and(channels[0], channels[2], channels[0]);
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
 
+	cv::Ptr<cv::cuda::Filter> filter = cv::cuda::createGaussianFilter(channels[0].type(), channels[1].type(), cv::Size(7,7), 7);
+	filter->apply(channels[0], channels[1]);
+
 	// Return back to the CPU
-	channels[0].download(bw);
+	channels[1].download(bw);
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
-	cv::imshow("Object Detection", bw);
+
+	cv::cuda::GpuMat g_circles;
+	cv::Ptr<cv::cuda::HoughCirclesDetector> houghCircles = cv::cuda::createHoughCirclesDetector(
+		1,	// dp, 
+		frameSize.height/4,	// minDist, 
+		200,	// cannyThreshold, 
+		100,	// votesThreshold, 
+		1,	// minRadius, 
+		300	// maxRadius
+	);
+	houghCircles->detect(channels[1], g_circles);
+
+	//cv::Mat circles;
+	std::vector<cv::Vec3f> circles;
+	circles.resize(g_circles.cols);
+	cv::Mat tmpMat(1, g_circles.cols, CV_32FC3, &circles[0]);
+	g_circles.download(tmpMat);
+
+	cv::Mat tuna;
+	cv::resize(bw, tuna, dispSize);
+	cv::imshow("Object Detection", tuna);
 
 #if 0
 	// Convert and filter the image to extract only green pixels
@@ -94,14 +118,12 @@ std::vector<double> ProcessContours(cv::Mat Im) {
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
 
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
-	return times;
+	return circles;
 }
 
 
 int main(int argc, char** argv)
 {
-	//const cv::Size dispSize(848, 480);
-	const cv::Size dispSize(1280, 720);
 	const cv::HersheyFonts font = cv::FONT_HERSHEY_PLAIN;
 	const int fHeight = 12;
 	const double fScale = double(dispSize.height) / fHeight / 25;
@@ -113,8 +135,8 @@ int main(int argc, char** argv)
 
 	std::ostringstream capturePipe;
 	capturePipe << "nvcamerasrc ! video/x-raw(memory:NVMM)"
-		<< ", width=(int)" << CAPTURE_COLS
-		<< ", height=(int)" << CAPTURE_ROWS
+		<< ", width=(int)" << frameSize.width
+		<< ", height=(int)" << frameSize.height
 		<< ", format=(string)I420, framerate=(fraction)30/1 ! "
 		<< "nvvidconv flip-method=2 ! video/x-raw, format=(string)BGRx ! "
 		<< "videoconvert ! video/x-raw, format=(string)BGR ! appsink";
@@ -150,13 +172,14 @@ int main(int argc, char** argv)
 
 
 		double t_start = double(clock())/CLOCKS_PER_SEC;
-		std::vector<double> times = ProcessContours(img);
+		std::vector<cv::Vec3f> balls = DetectFuel(img);
 		if(total_times.empty()) total_times = times;
 		else {
 			total_times[0] = n*n / (double(clock())/CLOCKS_PER_SEC - total_start);
 			for(size_t i = 1; i < times.size() && i < total_times.size(); ++i)
 				total_times[i] += times[i] - times[0];
 		}
+		times.clear();
 
 #if 0
 		// Draw pink boxes around detected targets
@@ -178,10 +201,25 @@ int main(int argc, char** argv)
 				osst << i << ": " << total_times[i] / n;
 				cv::putText(display, osst.str(), cv::Point(20,(4+i)*fLine), font, fScale, cv::Scalar(90,255,90), fBold);
 			}
+
 			std::ostringstream oss;
 			double t_end = double(clock())/CLOCKS_PER_SEC - t_start;
 			oss << 1000.0*(t_end) << " ms, frame: " << n;
 			cv::putText(display, oss.str(), cv::Point(20,2*fLine), font, fScale, cv::Scalar(0, 200,255), fBold);
+
+			double kX = double(dispSize.width) / frameSize.width;
+			double kY = double(dispSize.height) / frameSize.height;
+			std::ostringstream ossb;
+			double x = 0;
+			if(balls.size()>0) x = balls.size();
+			ossb << "Balls: " << x << " Scale: " << kX << "/" << kY;
+			cv::putText(display, ossb.str(), cv::Point(20,20*fLine), font, fScale, cv::Scalar(0, 200,200), fBold);
+
+			for(size_t i=0; i < balls.size(); ++i) {
+				cv::Vec3f c = balls[i];
+				circle(display, cv::Point(c[0]*kX, c[1]*kY), c[2]*kX, cv::Scalar(0,0,255), 3, cv::LINE_AA);
+			}
+
 			cv::imshow("Original", display);
 		}
 
