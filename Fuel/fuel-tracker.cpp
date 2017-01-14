@@ -20,9 +20,15 @@
  */
 static cv::Vec3i BlobLower(26, 63,  60);
 static cv::Vec3i BlobUpper(41, 255, 255);
+static int cannyThreshold = 160;
+static int votesThreshold = 16;
+static int minD = 50;
+static int minR = 2;
+static int maxR = 50;
 
 static const cv::Size frameSize(1280, 720);
 static const cv::Size dispSize(848, 480);
+static const cv::Size tunaSize(424, 240);
 
 static std::vector<double> times;
 /* Microsoft HD3000 camera, 424x240, inches */
@@ -74,23 +80,28 @@ std::vector<cv::Vec3f> DetectFuel(cv::Mat Im) {
 	cv::cuda::bitwise_and(channels[0], channels[2], channels[0]);
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
 
-	cv::Ptr<cv::cuda::Filter> filter = cv::cuda::createGaussianFilter(channels[0].type(), channels[1].type(), cv::Size(7,7), 7);
-	filter->apply(channels[0], channels[1]);
+	//cv::Ptr<cv::cuda::Filter> filter = cv::cuda::createGaussianFilter(channels[0].type(), channels[1].type(), cv::Size(17,17), 7);
+	//filter->apply(channels[0], channels[1]);
+	cv::Mat element = getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(7,7), cv::Point(3,3));
+	cv::Ptr<cv::cuda::Filter> erode = cv::cuda::createMorphologyFilter(cv::MORPH_ERODE, channels[0].type(), element);
+	cv::Ptr<cv::cuda::Filter> dilate = cv::cuda::createMorphologyFilter(cv::MORPH_DILATE, channels[1].type(), element);
+	erode->apply(channels[0], channels[1]);
+	dilate->apply(channels[1], channels[0]);
 
 	// Return back to the CPU
-	channels[1].download(bw);
+	channels[0].download(bw);
 	times.push_back(double(clock())/CLOCKS_PER_SEC);
 
 	cv::cuda::GpuMat g_circles;
 	cv::Ptr<cv::cuda::HoughCirclesDetector> houghCircles = cv::cuda::createHoughCirclesDetector(
 		1,	// dp, 
-		frameSize.height/4,	// minDist, 
-		200,	// cannyThreshold, 
-		100,	// votesThreshold, 
-		1,	// minRadius, 
-		300	// maxRadius
+		0.01 * minD * frameSize.height,	// minDist, 
+		cannyThreshold,	// cannyThreshold, 
+		votesThreshold,	// votesThreshold, 
+		0.01 * minR * frameSize.width,	// minRadius, 
+		0.01 * maxR * frameSize.height	// maxRadius
 	);
-	houghCircles->detect(channels[1], g_circles);
+	houghCircles->detect(channels[0], g_circles);
 
 	//cv::Mat circles;
 	std::vector<cv::Vec3f> circles;
@@ -99,7 +110,7 @@ std::vector<cv::Vec3f> DetectFuel(cv::Mat Im) {
 	g_circles.download(tmpMat);
 
 	cv::Mat tuna;
-	cv::resize(bw, tuna, dispSize);
+	cv::resize(bw, tuna, tunaSize);
 	cv::imshow("Object Detection", tuna);
 
 #if 0
@@ -151,6 +162,7 @@ int main(int argc, char** argv)
 	}
 
 	cv::namedWindow("Object Detection", cv::WINDOW_NORMAL);
+	cv::namedWindow("Original", cv::WINDOW_NORMAL);
 	//-- Trackbars to set thresholds for RGB values
 	cv::createTrackbar("Low H","Object Detection", &BlobLower[0], 255);
 	cv::createTrackbar("High H","Object Detection", &BlobUpper[0], 255);
@@ -159,6 +171,11 @@ int main(int argc, char** argv)
 	cv::createTrackbar("Low V","Object Detection", &BlobLower[2], 255);
 	cv::createTrackbar("High V","Object Detection", &BlobUpper[2], 255);
 
+	cv::createTrackbar("Canny","Original", &cannyThreshold, 255);
+	cv::createTrackbar("Votes","Original", &votesThreshold, 255);
+	cv::createTrackbar("minDist","Original", &minD, 100);
+	cv::createTrackbar("minRad","Original", &minR, 100);
+	cv::createTrackbar("maxRad","Original", &maxR, 100);
 	std::vector<double> total_times;
 	double total_start = double(clock())/CLOCKS_PER_SEC;
 	for(size_t n = 1;; ++n) {
