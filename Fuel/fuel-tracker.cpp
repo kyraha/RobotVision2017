@@ -25,6 +25,7 @@ static int votesThreshold = 16;
 static int minD = 50;
 static int minR = 2;
 static int maxR = 50;
+static int dP = 0;
 
 static const cv::Size frameSize(1280, 720);
 static const cv::Size dispSize(848, 480);
@@ -83,8 +84,8 @@ std::vector<cv::Vec3f> DetectFuel(cv::Mat Im) {
 	//cv::Ptr<cv::cuda::Filter> filter = cv::cuda::createGaussianFilter(channels[0].type(), channels[1].type(), cv::Size(17,17), 7);
 	//filter->apply(channels[0], channels[1]);
 	cv::Mat element = getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(7,7), cv::Point(3,3));
-	cv::Ptr<cv::cuda::Filter> erode = cv::cuda::createMorphologyFilter(cv::MORPH_ERODE, channels[0].type(), element);
-	cv::Ptr<cv::cuda::Filter> dilate = cv::cuda::createMorphologyFilter(cv::MORPH_DILATE, channels[1].type(), element);
+	cv::Ptr<cv::cuda::Filter> erode = cv::cuda::createMorphologyFilter(cv::MORPH_OPEN, channels[0].type(), element);
+	cv::Ptr<cv::cuda::Filter> dilate = cv::cuda::createMorphologyFilter(cv::MORPH_CLOSE, channels[1].type(), element);
 	erode->apply(channels[0], channels[1]);
 	dilate->apply(channels[1], channels[0]);
 
@@ -94,10 +95,10 @@ std::vector<cv::Vec3f> DetectFuel(cv::Mat Im) {
 
 	cv::cuda::GpuMat g_circles;
 	cv::Ptr<cv::cuda::HoughCirclesDetector> houghCircles = cv::cuda::createHoughCirclesDetector(
-		1,	// dp, 
+		1.0+0.1*dP,	// dp, 
 		0.01 * minD * frameSize.height,	// minDist, 
-		cannyThreshold,	// cannyThreshold, 
-		votesThreshold,	// votesThreshold, 
+		cannyThreshold+1,	// cannyThreshold, 
+		votesThreshold+1,	// votesThreshold, 
 		0.01 * minR * frameSize.width,	// minRadius, 
 		0.01 * maxR * frameSize.height	// maxRadius
 	);
@@ -144,6 +145,9 @@ int main(int argc, char** argv)
 	cv::Mat img;
 	cv::Mat display;
 
+	cv::VideoCapture capture;
+//gst-launch-1.0 nvcamerasrc fpsRange="30.0 30.0" ! 'video/x-raw(memory:NVMM), width=(int)1920, height=(int)1080, format=(string)I420, framerate=(fraction)30/1' ! nvtee ! nvvidconv flip-method=2 ! 'video/x-raw(memory:NVMM), format=(string)I420' ! nvoverlaysink -e
+//cv::VideoCapture capture("nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)1280, height=(int)720,format=(string)I420, framerate=(fraction)30/1 ! nvvidconv flip-method=2 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink");
 	std::ostringstream capturePipe;
 	capturePipe << "nvcamerasrc ! video/x-raw(memory:NVMM)"
 		<< ", width=(int)" << frameSize.width
@@ -151,11 +155,13 @@ int main(int argc, char** argv)
 		<< ", format=(string)I420, framerate=(fraction)30/1 ! "
 		<< "nvvidconv flip-method=2 ! video/x-raw, format=(string)BGRx ! "
 		<< "videoconvert ! video/x-raw, format=(string)BGR ! appsink";
-	cv::VideoCapture capture(capturePipe.str());
-
-//gst-launch-1.0 nvcamerasrc fpsRange="30.0 30.0" ! 'video/x-raw(memory:NVMM), width=(int)1920, height=(int)1080, format=(string)I420, framerate=(fraction)30/1' ! nvtee ! nvvidconv flip-method=2 ! 'video/x-raw(memory:NVMM), format=(string)I420' ! nvoverlaysink -e
-//cv::VideoCapture capture("nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)1280, height=(int)720,format=(string)I420, framerate=(fraction)30/1 ! nvvidconv flip-method=2 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink");
-
+	if(!capture.open(capturePipe.str())) {
+		capture.open(0);
+		capture.set(cv::CAP_PROP_FRAME_WIDTH, frameSize.width);
+		capture.set(cv::CAP_PROP_FRAME_HEIGHT, frameSize.height);
+		std::cerr << "Resolution: "<< capture.get(cv::CAP_PROP_FRAME_WIDTH)
+			<< "x" << capture.get(cv::CAP_PROP_FRAME_HEIGHT) << std::endl;
+	}
 	if(!capture.isOpened()) {
 		std::cerr << "Couldn't connect to camera" << std::endl;
 		return 1;
@@ -173,9 +179,10 @@ int main(int argc, char** argv)
 
 	cv::createTrackbar("Canny","Original", &cannyThreshold, 255);
 	cv::createTrackbar("Votes","Original", &votesThreshold, 255);
-	cv::createTrackbar("minDist","Original", &minD, 100);
-	cv::createTrackbar("minRad","Original", &minR, 100);
-	cv::createTrackbar("maxRad","Original", &maxR, 100);
+//	cv::createTrackbar("minDist","Original", &minD, 100);
+//	cv::createTrackbar("minRad","Original", &minR, 100);
+//	cv::createTrackbar("maxRad","Original", &maxR, 100);
+	cv::createTrackbar("dP","Original", &dP, 100);
 	std::vector<double> total_times;
 	double total_start = double(clock())/CLOCKS_PER_SEC;
 	for(size_t n = 1;; ++n) {
@@ -213,7 +220,7 @@ int main(int argc, char** argv)
 		if(n%1 == 0) {
 			cv::resize(img, display, dispSize);
 
-			for(int i=0; i < total_times.size(); ++i) {
+			for(size_t i=0; i < total_times.size(); ++i) {
 				std::ostringstream osst;
 				osst << i << ": " << total_times[i] / n;
 				cv::putText(display, osst.str(), cv::Point(20,(4+i)*fLine), font, fScale, cv::Scalar(90,255,90), fBold);
@@ -247,6 +254,12 @@ int main(int argc, char** argv)
 		if ((key & 255) == 32 ) {
 			cv::waitKey();
 		}
+		if ((key & 255) == 'w' ) {
+			std::ostringstream fname("calib");
+			fname << n << ".jpg";
+			cv::imwrite(fname.str(), img);
+		}
+
 	}
 	return 0;
 }
