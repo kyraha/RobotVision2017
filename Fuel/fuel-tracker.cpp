@@ -143,9 +143,11 @@ int main(int argc, char** argv)
 	const int fBold = fScale + 0.5;
 
 	cv::Mat img;
+	cv::Mat sec;
 	cv::Mat display;
 
 	cv::VideoCapture capture;
+	cv::VideoCapture secondary;
 //gst-launch-1.0 nvcamerasrc fpsRange="30.0 30.0" ! 'video/x-raw(memory:NVMM), width=(int)1920, height=(int)1080, format=(string)I420, framerate=(fraction)30/1' ! nvtee ! nvvidconv flip-method=2 ! 'video/x-raw(memory:NVMM), format=(string)I420' ! nvoverlaysink -e
 //cv::VideoCapture capture("nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)1280, height=(int)720,format=(string)I420, framerate=(fraction)30/1 ! nvvidconv flip-method=2 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink");
 	std::ostringstream capturePipe;
@@ -161,6 +163,13 @@ int main(int argc, char** argv)
 		capture.set(cv::CAP_PROP_FRAME_HEIGHT, frameSize.height);
 		std::cerr << "Resolution: "<< capture.get(cv::CAP_PROP_FRAME_WIDTH)
 			<< "x" << capture.get(cv::CAP_PROP_FRAME_HEIGHT) << std::endl;
+	}
+	else {
+		secondary.open(0);
+		secondary.set(cv::CAP_PROP_FRAME_WIDTH, 640);
+		secondary.set(cv::CAP_PROP_FRAME_HEIGHT, 360);
+		std::cerr << "Secondary Resolution: "<< secondary.get(cv::CAP_PROP_FRAME_WIDTH)
+			<< "x" << secondary.get(cv::CAP_PROP_FRAME_HEIGHT) << std::endl;
 	}
 	if(!capture.isOpened()) {
 		std::cerr << "Couldn't connect to camera" << std::endl;
@@ -188,6 +197,7 @@ int main(int argc, char** argv)
 	for(size_t n = 1;; ++n) {
 
 		capture >> img;
+		if(secondary.isOpened()) secondary >> sec;
 		if (img.empty()) {
 			std::cerr << " Error reading from camera, empty frame." << std::endl;
 			usleep(5 * 1000000);
@@ -245,6 +255,7 @@ int main(int argc, char** argv)
 			}
 
 			cv::imshow("Original", display);
+			if(secondary.isOpened()) cv::imshow("Secondary",sec);
 		}
 
 
