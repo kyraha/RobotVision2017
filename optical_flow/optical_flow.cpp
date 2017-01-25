@@ -154,7 +154,7 @@ static void showFlow(const char* name, const GpuMat& d_flow)
     Mat flowy(planes[1]);
 
     Mat out;
-    drawOpticalFlow(flowx, flowy, out, 10);
+    drawOpticalFlow(flowx, flowy, out, -100);
 
     imshow(name, out);
 }
@@ -186,6 +186,8 @@ int main(int argc, const char* argv[])
     VideoCapture capture(0);
     capture.set(cv::CAP_PROP_FRAME_WIDTH, frameSize.width);
     capture.set(cv::CAP_PROP_FRAME_HEIGHT, frameSize.height);
+    capture.set(cv::CAP_PROP_BRIGHTNESS, 0);
+    capture.set(cv::CAP_PROP_CONTRAST, 0);
     capture.set(cv::CAP_PROP_FPS, 7.5); 
     cout << "Capture frame rate: " << capture.get(cv::CAP_PROP_FPS) << std::endl;
     Mat frame, smaller;
@@ -284,10 +286,11 @@ int main(int argc, const char* argv[])
 	    }
 
 	    double gtimeSec = (getTickCount() - gstart) / getTickFrequency();
-	    cout << "Real FPS: " << double(n)/gtimeSec << endl;
+	    if(n%30 == 0) cout << "Real FPS: " << double(n)/gtimeSec << endl;
 	    imshow("Frame 0", frame);
 	    int key = waitKey(10);
 	    if((key & 0xFF) == 27) break;
+	    if((key & 0xFF) == 32) waitKey();
     }
 
     return 0;
